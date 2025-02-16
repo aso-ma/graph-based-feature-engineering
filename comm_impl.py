@@ -38,7 +38,7 @@ class Constants:
     EDGE_RM_TH = 0.7
 
     # Statistic test significance level
-    SIGNIFICANCE_LEVEL = 0.9
+    SIGNIFICANCE_LEVEL = 0.05
 
     # Community detection methods
     COMM_DET_METHODS = ['louvain', 'girvan_newman']
