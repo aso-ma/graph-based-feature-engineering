@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Tuple, Final, Dict, Union
+from typing import List, Tuple, Final, Dict, Union, Callable
 from sklearn.base import ClassifierMixin
 import pandas as pd
 from tqdm import tqdm
@@ -11,13 +11,13 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.base import clone
 import gower 
 import networkx as nx
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, chi2_contingency
 import pickle
 from cdlib import algorithms
 from sklearn.decomposition import PCA
+import warnings
 
 
-@dataclass(frozen=True)
 class Constants:
     DATA_PATH: Final[str] = "./data/tabular_data.csv"
     TARGET_COL: Final[str] = "Target"
@@ -25,26 +25,31 @@ class Constants:
     FOLD_COUNT: Final[int] = 10
 
     # List of classifiers
-    CLFs = [
+    CLFs: List[ClassifierMixin] = [
         RandomForestClassifier(), 
         LogisticRegression(max_iter=250), 
         KNeighborsClassifier(n_neighbors=3)
     ]
     
     # List of evaluation metrics
-    EVAL_METRICS = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'matthews_corrcoef']
+    EVAL_METRICS: List[str] = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'matthews_corrcoef']
 
     # Edge Removal Threshold
-    EDGE_RM_TH = 0.7
+    EDGE_RM_TH: float = 0.7
 
     # Statistic test significance level
-    SIGNIFICANCE_LEVEL = 0.05
+    SIGNIFICANCE_LEVEL: float = 0.9
 
     # Community detection methods
-    COMM_DET_METHODS = ['louvain', 'girvan_newman']
+    # COMM_DET_METHODS = ['louvain', 'girvan_newman']
+
+    CD_METHODS: Dict[str, Callable] = {
+        'louvain': algorithms.louvain,
+        'girvan_newman': algorithms.girvan_newman
+    }
 
     # Number of principal components
-    NUM_PC = 2
+    NUM_PC: int = 2
 
 
 class StatsFeatSel:
@@ -59,22 +64,27 @@ class StatsFeatSel:
         df_graph_feat = extract_graph_features(graph)
         df_concat = concatenate_dataframes(dataframe, df_graph_feat)
 
-        groups = df_concat[Constants.TARGET_COL].unique()
-        # Ensure the target column is binary
-        if len(groups) != 2:
-            raise ValueError("Target column must be binary for t-test.")
-        # Split the data into two groups based on the target column
-        group1 = df_concat[df_concat[Constants.TARGET_COL] == groups[0]]
-        group2 = df_concat[df_concat[Constants.TARGET_COL] == groups[1]]
-        for col in df_concat.columns:
-            if col != Constants.TARGET_COL:
-                t_stat, p_value = ttest_ind(group1[col], group2[col], nan_policy='omit')
-                if p_value < Constants.SIGNIFICANCE_LEVEL:
-                    if col.startswith(tuple(Constants.COMM_DET_METHODS)):
-                        comm_method = next((method for method in Constants.COMM_DET_METHODS if col.startswith(method)), None)
-                        StatsFeatSel._significant_graph_cols.add(comm_method)
-                    else:
-                        StatsFeatSel._significant_cols.append(col)
+       
+
+        feature_columns = [col for col in df_concat.columns if col != Constants.TARGET_COL]
+        for col in feature_columns:
+            if check_col_type(df_concat, col) in ['binary', 'categorical']:
+                contingency_table = pd.crosstab(df_concat[col], df_concat[Constants.TARGET_COL])
+                _, p_value, _, _ = chi2_contingency(contingency_table)
+            else:
+                groups = df_concat[Constants.TARGET_COL].unique()
+                # Split the data into two groups based on the target column
+                group1 = df_concat[df_concat[Constants.TARGET_COL] == groups[0]]
+                group2 = df_concat[df_concat[Constants.TARGET_COL] == groups[1]]
+                _, p_value = ttest_ind(group1[col], group2[col])
+            
+            if p_value < Constants.SIGNIFICANCE_LEVEL:
+                if col.startswith(tuple(Constants.CD_METHODS.keys())):
+                    comm_method = next((method for method in Constants.CD_METHODS.keys() if col.startswith(method)), None)
+                    if comm_method != None:
+                         StatsFeatSel._significant_graph_cols.add(comm_method)
+                else:
+                    StatsFeatSel._significant_cols.append(col)
 
         with open(Constants.OUT_DIR_PATH + 'significant_columns.pkl', 'wb') as f:
             pickle.dump(StatsFeatSel._significant_cols, f)
@@ -87,6 +97,18 @@ class StatsFeatSel:
 
 def concatenate_dataframes(df_primary_feature, df_graph_feature):
     return pd.concat([df_primary_feature, df_graph_feature], axis=1)
+
+def check_col_type(dataframe: pd.DataFrame, col_name: str, max_unique_values: int=15) -> str:
+    unique_values = dataframe[col_name].nunique()
+    # Check if the column is binary
+    if unique_values == 2:
+        return 'binary'
+    # Check if the column is categorical
+    elif unique_values <= max_unique_values:
+        return 'categorical'
+    # If neither binary nor categorical
+    else:
+        return 'non-categorical'
 
 def preprocess(dataframe: pd.DataFrame) -> pd.DataFrame:
     # do some preprocessing if required 
@@ -167,31 +189,30 @@ def edge_rm(graph: nx.Graph, th: float, nodes: Union[List[str], List[int], None]
     return graph
 
 def extract_graph_features(graph: nx.Graph, only_significant: bool = False) -> pd.DataFrame:
-    graph_feat_list = []
+
+    method_dict = dict(Constants.CD_METHODS)
     if (only_significant):
         _, g_significant_feats = StatsFeatSel.get_features()
-        graph_feat_list = g_significant_feats
-    else: 
-        graph_feat_list = Constants.COMM_DET_METHODS
+        non_significant_methods = [method for method in method_dict.keys() if method not in g_significant_feats]
+        for method in non_significant_methods:
+            del method_dict[method]
+
 
     df_graph_features = pd.DataFrame(index=graph.nodes())
 
-    if 'louvain' in graph_feat_list:
-        communities = algorithms.louvain(graph)
-        df_graph_features = insert_community_columns_into_df(df_graph_features, communities, 'louvain')
-
-    if 'girvan_newman' in graph_feat_list:
-        communities = algorithms.girvan_newman(graph, level=3)
-        df_graph_features = insert_community_columns_into_df(df_graph_features, communities, 'girvan_newman')
+    for method_name, method_func in method_dict.items():
+        if method_name == 'girvan_newman':
+            communities = method_func(graph, level=3)
+        else:
+            communities = method_func(graph)
+        
+        num_comms = len(communities.communities)
+        if (num_comms <= 1):
+            warnings.warn(f"The <{method_name}> algorithm was excluded from further analysis as it identified only a single community.", UserWarning)
+        else:
+            df_graph_features = insert_community_columns_into_df(df_graph_features, communities, method_name)
 
     return df_graph_features
-
-# def extract_graph_features_for(graph: nx.Graph, test_nodes: Union[List[str], List[int]]) -> pd.DataFrame:
-#     if not all(node in graph for node in test_nodes):
-#         raise ValueError("Not all nodes in the list are in the graph!")
-    
-#     df_features = extract_graph_features(graph, True)
-#     return df_features
 
 def insert_community_columns_into_df(dataframe: pd.DataFrame, comms: List[List[int]], comm_label: str) -> pd.DataFrame:
     for idx, community in enumerate(comms.communities, start=1):
@@ -282,11 +303,15 @@ if __name__ == "__main__":
     significant_feat, significant_graph_feat = StatsFeatSel.get_features()
     if (len(significant_feat) == 0):
         raise ValueError("There are no statistically significant features in the data!")
-    if (len(significant_feat) == 0):
+    if (len(significant_graph_feat) == 0):
         raise ValueError("There are no statistically significant graph-based features in the data!")
 
+    # remove insignificant primary features
+    meaningless_features = [col for col in data.columns if col not in significant_feat and col != Constants.TARGET_COL] 
+    df_significant = data.drop(columns=meaningless_features)
+
     # split data into k-folds
-    fold_data = k_fold_split(data, Constants.FOLD_COUNT)
+    fold_data = k_fold_split(df_significant, Constants.FOLD_COUNT)
     # do a classification task with primary data
     primary_evaluation(fold_data, 'primary_classification_result')
     # define a dataframe for final evaluation result
@@ -315,9 +340,6 @@ if __name__ == "__main__":
         df_test_nodes_feat = df_test_graph_feat.loc[df_test.index.values]
         df_test_nodes_pca = perform_pca(df_test_nodes_feat)
         df_test_nodes_final = concatenate_dataframes(df_test, df_test_nodes_pca)
-        # remove the test nodes from graph
-        g_test.remove_nodes_from(df_test.index.values)
-        g_train = g_test
         # test 
         fold_evaluation(df_final_evaluation, trained_clfs, df_test_nodes_final, f'final_classification_result_fold_{fold_num}')
 
