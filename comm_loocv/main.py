@@ -7,10 +7,11 @@ from learning import evaluate_classifiers, perform_pca, transform_test_pca
 from tqdm import tqdm
 from similarity_graph import generate_similarity_graph, add_test_node_to
 from community_detection import (
-    extract_graph_features, 
+    detect_communities, 
+    get_graph_features,
     assign_by_neighbors,
     assign_by_modularity,
-    get_community_features_for
+    get_test_node_community_features
 )
 from utils import concatenate_dataframes
 import pickle
@@ -35,9 +36,10 @@ if __name__ == "__main__":
         graph_name = f"fold_{idx}_train"
         g_train = generate_similarity_graph(dataframe=X_train, graph_name=graph_name)
         # extract train feature 
-        df_graph_feature, community_result = extract_graph_features(g_train)
+        community_result = detect_communities(g_train)
+        df_graph_feature = get_graph_features(community_result=community_result, encoding_method=Constants.ENCODING_METHOD)
         # pca
-        if Constants.PAC_FLAG:
+        if Constants.PAC_FLAG and Constants.ENCODING_METHOD == "one_hot":
             df_graph_feature, train_pca = perform_pca(train_data=df_graph_feature)
         # concatenate features
         df_concatenated_features = concatenate_dataframes(X_train, df_graph_feature)
@@ -58,12 +60,13 @@ if __name__ == "__main__":
             graph=test_graph, test_node=test_node, community_result=community_result
         )
 
-        df_test_feature = get_community_features_for(
+        df_test_feature = get_test_node_community_features(
             test_node=test_node,
             node_meth_comm=method_comm_dict,
-            community_result=community_result
+            community_result=community_result,
+            encoding_method=Constants.ENCODING_METHOD
         )
-        if Constants.PAC_FLAG:
+        if Constants.PAC_FLAG and Constants.ENCODING_METHOD == "one_hot":
             df_test_feature = transform_test_pca(df_test_feature, train_pca)
         # concatenate features
         df_concatenated_test_features = concatenate_dataframes(X_test, df_test_feature)

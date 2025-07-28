@@ -7,6 +7,7 @@ from sklearn.metrics import accuracy_score, f1_score, recall_score
 from tqdm import tqdm
 from constants import Constants
 import numpy as np
+from community_detection import CD_METHODS
 
 CLFs = [
     RandomForestClassifier(), 
@@ -45,21 +46,41 @@ def evaluate_classifiers(fold_data: List[Tuple[pd.DataFrame, pd.DataFrame, pd.Da
     
     df_result.to_pickle(saving_path)
 
-def perform_pca(train_data: pd.DataFrame) -> Tuple[pd.DataFrame, PCA]:
-    pca = PCA(n_components=Constants.NUM_PC)
-    principal_components = pca.fit_transform(train_data)
+def __largest_power_of_2_less_than(n):
+    if n <= 1:
+        return None 
+    return 1 << (n.bit_length() - 1)
+
+def __get_num_principal_component(graph_augmented_data: pd.DataFrame) -> int: 
+    count = 0
+    for meth in CD_METHODS.keys():
+        prefix = f"{meth}_comm_"
+        count += len([col for col in graph_augmented_data.columns if col.startswith(prefix)])
+    pow_of_2 = __largest_power_of_2_less_than(count)
+    return max(2, pow_of_2 or count)
+
+def perform_pca(graph_augmented_train_data: pd.DataFrame) -> Tuple[pd.DataFrame, PCA]:
+    if Constants.ENCODING_METHOD != "one_hot":
+        raise ValueError(f"Invalid encoding_method: {Constants.ENCODING_METHOD}. Must be 'one_hot'.")
+
+    num_pc = __get_num_principal_component(graph_augmented_train_data)
+    pca = PCA(n_components=num_pc)
+    principal_components = pca.fit_transform(graph_augmented_train_data)
     df_pca_result = pd.DataFrame(
-        index=train_data.index,
+        index=graph_augmented_train_data.index,
         data=principal_components,
-        columns=[f'PC{i}' for i in range(1, Constants.NUM_PC + 1)]
+        columns=[f'PC{i}' for i in range(1, num_pc + 1)]
     )
     return df_pca_result, pca
 
-def transform_test_pca(test_data: pd.DataFrame, fitted_pca: PCA) -> pd.DataFrame:
-    principal_components = fitted_pca.transform(test_data)
+def transform_test_pca(graph_augmented_test_data: pd.DataFrame, fitted_pca: PCA) -> pd.DataFrame:
+    if Constants.ENCODING_METHOD != "one_hot":
+        raise ValueError(f"Invalid encoding_method: {Constants.ENCODING_METHOD}. Must be 'one_hot'.")
+    num_pc = __get_num_principal_component(graph_augmented_test_data)
+    principal_components = fitted_pca.transform(graph_augmented_test_data)
     df_pca_result = pd.DataFrame(
-        index=test_data.index,
+        index=graph_augmented_test_data.index,
         data=principal_components,
-        columns=[f'PC{i}' for i in range(1, Constants.NUM_PC + 1)]
+        columns=[f'PC{i}' for i in range(1, num_pc + 1)]
     )
     return df_pca_result

@@ -1,4 +1,4 @@
-from typing import Final, List, Dict
+from typing import Final, Literal
 
 class Constants:
     # Paths
@@ -20,7 +20,6 @@ class Constants:
     
     # Use Principal Component Analysis (PCA) for dimensionality reduction 
     PAC_FLAG = False
-    # Number of principal components
-    NUM_PC: int = 2
-
-    # PATHS
+    
+    # ENCODING METHOD
+    ENCODING_METHOD: Literal["binary", "one_hot"] = "binary"
