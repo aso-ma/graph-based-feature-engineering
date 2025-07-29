@@ -40,7 +40,7 @@ if __name__ == "__main__":
         df_graph_feature = get_graph_features(community_result=community_result, encoding_method=Constants.ENCODING_METHOD)
         # pca
         if Constants.PAC_FLAG and Constants.ENCODING_METHOD == "one_hot":
-            df_graph_feature, train_pca = perform_pca(train_data=df_graph_feature)
+            df_graph_feature, train_pca = perform_pca(graph_augmented_train_data=df_graph_feature)
         # concatenate features
         df_concatenated_features = concatenate_dataframes(X_train, df_graph_feature)
         # Save processed X_train
@@ -57,17 +57,17 @@ if __name__ == "__main__":
         )
         # heuristically add the test node to the train graph communities
         method_comm_dict = assign_by_modularity(
-            graph=test_graph, test_node=test_node, community_result=community_result
+            test_graph=test_graph, test_node=test_node, community_result=community_result
         )
 
         df_test_feature = get_test_node_community_features(
             test_node=test_node,
-            node_meth_comm=method_comm_dict,
+            test_node_meth_comm=method_comm_dict,
             community_result=community_result,
             encoding_method=Constants.ENCODING_METHOD
         )
         if Constants.PAC_FLAG and Constants.ENCODING_METHOD == "one_hot":
-            df_test_feature = transform_test_pca(df_test_feature, train_pca)
+            df_test_feature = transform_test_pca(graph_augmented_test_data=df_test_feature, fitted_pca=train_pca)
         # concatenate features
         df_concatenated_test_features = concatenate_dataframes(X_test, df_test_feature)
         # Save processed X_test

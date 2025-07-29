@@ -19,7 +19,7 @@ class Constants:
     EDGE_RM_TH: float = 0.5
     
     # Use Principal Component Analysis (PCA) for dimensionality reduction 
-    PAC_FLAG = False
+    PAC_FLAG = True
     
     # ENCODING METHOD
-    ENCODING_METHOD: Literal["binary", "one_hot"] = "binary"
+    ENCODING_METHOD: Literal["binary", "one_hot"] = "one_hot"

@@ -14,8 +14,9 @@ CD_RESULT_TYPE = Dict[str, Dict[int, List[str | int]]]
 ENCODING_TYPE = Literal["binary", "one_hot"]
 
 def __one_hot_encoding(community_result: CD_RESULT_TYPE) -> pd.DataFrame:
-    node_set = {node for community_list in community_result[list(CD_METHODS.keys())[0]] for node in community_list }
-    df_features = pd.DataFrame(index=node_set)
+    comm_dict = community_result[list(CD_METHODS.keys())[0]]
+    node_set = {node for community_list in comm_dict.values() for node in community_list }
+    df_features = pd.DataFrame(index=list(node_set))
     for meth, communities_dict in community_result.items():
         for comm_idx, community in communities_dict.items():
             column_name = f"{meth}_comm_{comm_idx}"
@@ -27,8 +28,9 @@ def __int_to_binary(num: int, length: int) -> str:
     return format(num, f'0{length}b')
 
 def __binary_encoding(community_result: CD_RESULT_TYPE) -> pd.DataFrame:
-    node_set = {node for community_list in community_result[list(CD_METHODS.keys())[0]] for node in community_list }
-    df_features = pd.DataFrame(index=node_set)
+    comm_dict = community_result[list(CD_METHODS.keys())[0]]
+    node_set = {node for community_list in comm_dict.values() for node in community_list }
+    df_features = pd.DataFrame(index=list(node_set))
     for meth, communities_dict in community_result.items():
         num_comms = len(communities_dict)
         node_comm_dict = {n:"0"*num_comms for n in node_set}
@@ -39,9 +41,6 @@ def __binary_encoding(community_result: CD_RESULT_TYPE) -> pd.DataFrame:
     return df_features
 
 def get_graph_features(community_result: CD_RESULT_TYPE, encoding_method: ENCODING_TYPE = "binary") -> pd.DataFrame:
-    if encoding_method not in ("binary", "one_hot"):
-        raise ValueError(f"Invalid encoding_method: {encoding_method}. Must be 'binary' or 'one_hot'")
-    
     if encoding_method == "binary":
         return __binary_encoding(community_result)
     # if `encoding_method` equals to `one_hot`
