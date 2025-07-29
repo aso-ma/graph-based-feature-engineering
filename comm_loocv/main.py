@@ -11,7 +11,8 @@ from community_detection import (
     get_graph_features,
     assign_by_neighbors,
     assign_by_modularity,
-    get_test_node_community_features
+    get_test_node_community_features,
+    CD_METHODS
 )
 from utils import concatenate_dataframes
 import pickle
@@ -81,10 +82,17 @@ if __name__ == "__main__":
         X_train_combined = pd.read_pickle(train_feat_path)
         X_test_combined = pd.read_pickle(test_feat_path)
 
+        if Constants.ENCODING_METHOD == "binary":
+            for meth in CD_METHODS.keys():
+                X_train_combined[meth] = X_train_combined[meth].astype(int)
+                X_test_combined[meth] = X_test_combined[meth].astype(int)
+
         graph_augmented_fold_data.append((X_train_combined, X_test_combined, y_train, y_test))
 
     with open(Constants.GRAPH_AUGMENTED_FOLD_DATA_PATH, 'wb') as f:
         pickle.dump(graph_augmented_fold_data, f)
     
+    
+        
 
     evaluate_classifiers(fold_data=graph_augmented_fold_data, primary=False)

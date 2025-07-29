@@ -6,8 +6,8 @@ from constants import Constants
 from sklearn.model_selection import LeaveOneOut
 
 def preprocess(dataframe: pd.DataFrame) -> pd.DataFrame:
-    # do some preprocessing if required 
-    return dataframe
+    sampled_df = dataframe.sample(n=50, replace=False)
+    return sampled_df
 
 def __loocv_split(dataframe: pd.DataFrame) -> None:
     X = dataframe.drop(Constants.TARGET_COL, axis=1)

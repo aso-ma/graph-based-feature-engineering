@@ -24,8 +24,12 @@ def __one_hot_encoding(community_result: CD_RESULT_TYPE) -> pd.DataFrame:
             df_features[column_name] = [1 if node in community else 0 for node in df_features.index]
     return df_features
 
-def __int_to_binary(num: int, length: int) -> str:
-    return format(num, f'0{length}b')
+def __to_binary(num_comms: int, comm_idx: int) -> str:
+    if not (1 <= comm_idx <= num_comms):
+        raise ValueError("comm_idx must be between 1 and num_comms (inclusive).")
+    binary_list = ['0'] * num_comms
+    binary_list[num_comms - comm_idx] = '1'
+    return "".join(binary_list) 
 
 def __binary_encoding(community_result: CD_RESULT_TYPE) -> pd.DataFrame:
     comm_dict = community_result[list(CD_METHODS.keys())[0]]
@@ -33,10 +37,10 @@ def __binary_encoding(community_result: CD_RESULT_TYPE) -> pd.DataFrame:
     df_features = pd.DataFrame(index=list(node_set))
     for meth, communities_dict in community_result.items():
         num_comms = len(communities_dict)
-        node_comm_dict = {n:"0"*num_comms for n in node_set}
+        node_comm_dict = {n:"0" for n in node_set}
         for comm_idx, community in communities_dict.items():
             for node in community:
-                node_comm_dict[node] = __int_to_binary(comm_idx, num_comms)
+                node_comm_dict[node] = __to_binary(num_comms=num_comms, comm_idx=comm_idx)
         df_features[meth] = df_features.index.map(node_comm_dict)
     return df_features
 
@@ -106,8 +110,8 @@ def get_test_node_community_features(
     if encoding_method == "binary":
         df = pd.DataFrame(index=[test_node], columns=list(test_node_meth_comm.keys()))
         for meth, comm_idx in test_node_meth_comm.items():
-            binary_length = 5
-            df.at[test_node, meth] = __int_to_binary(num=comm_idx, length=binary_length)
+            num_comms = len(community_result[meth])
+            df.at[test_node, meth] = __to_binary(num_comms=num_comms, comm_idx=comm_idx)
         return df
     # if `encoding_method` equals to `one_hot`
     df = __get_test_node_one_hot_features(
