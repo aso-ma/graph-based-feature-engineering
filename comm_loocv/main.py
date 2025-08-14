@@ -36,6 +36,7 @@ if __name__ == "__main__":
     for idx, (X_train, X_test, y_train, y_test) in tqdm(enumerate(fold_data, start=1), total=len(fold_data), desc="Processing folds"):
         graph_name = f"fold_{idx}_train"
         g_train = generate_similarity_graph(dataframe=X_train, graph_name=graph_name)
+        # edge removal
         g_train = edge_removal(g_train, Constants.EDGE_RM_TH)
         # extract train feature 
         community_result = detect_communities(g_train)
