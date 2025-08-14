@@ -5,7 +5,7 @@ from constants import Constants
 from data_mgr import preprocess, get_fold_data
 from learning import evaluate_classifiers, perform_pca, transform_test_pca
 from tqdm import tqdm
-from similarity_graph import generate_similarity_graph, add_test_node_to
+from similarity_graph import generate_similarity_graph, add_test_node_to, edge_removal
 from community_detection import (
     detect_communities, 
     get_graph_features,
@@ -36,6 +36,7 @@ if __name__ == "__main__":
     for idx, (X_train, X_test, y_train, y_test) in tqdm(enumerate(fold_data, start=1), total=len(fold_data), desc="Processing folds"):
         graph_name = f"fold_{idx}_train"
         g_train = generate_similarity_graph(dataframe=X_train, graph_name=graph_name)
+        g_train = edge_removal(g_train, Constants.EDGE_RM_TH)
         # extract train feature 
         community_result = detect_communities(g_train)
         df_graph_feature = get_graph_features(community_result=community_result, encoding_method=Constants.ENCODING_METHOD)
